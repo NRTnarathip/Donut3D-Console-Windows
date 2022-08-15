@@ -100,14 +100,14 @@ int main()
         totalFPS++;
         if (totalTimeFPS > 1.f)
         {
-            fps = totalFPS;
+            // fps = totalFPS;
 
             totalFPS = 0;
             totalTimeFPS = 0.f;
         }
-        for (int y = 0; y < resY; y++)
+        for (uint32_t y = 0; y < resY; y++)
         {
-            for (int x = 0; x < resX; x++)
+            for (uint32_t x = 0; x < resX; x++)
             {
                 int access = x + (y * resX);
                 glm::vec2 uv = glm::vec2(x / (float)resX, y / (float)resY);
