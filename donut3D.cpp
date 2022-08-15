@@ -1,63 +1,16 @@
 #include <algorithm>
 #include <iostream>
 #include <windows.h>
+#include <functional>
 #include "glm/glm.hpp"
 #include "glm/ext.hpp"
 #include "glm/gtx/string_cast.hpp"
+
+#include "utils.h"
+#include "world.h"
+
+World world = World();
 float m_time = 0.f;
-void wait(DWORD millisecond)
-{
-    Sleep(millisecond);
-}
-glm::mat3 rotateX(float theta)
-{
-    float c = cos(theta);
-    float s = sin(theta);
-    return glm::mat3({1, 0, 0}, {0, c, -s}, {0, s, c});
-}
-glm::mat3 rotateY(float theta)
-{
-    float c = cos(theta);
-    float s = sin(theta);
-    return glm::mat3({c, 0, s}, {0, 1, 0}, {-s, 0, c});
-}
-glm::mat3 rotateZ(float theta)
-{
-    float c = cos(theta);
-    float s = sin(theta);
-    return glm::mat3({c, -s, 0}, {s, c, 0}, {0, 0, 1});
-}
-float sdTorus(glm::vec3 p, glm::vec2 t)
-{
-
-    glm::vec2 q = {glm::length(glm::vec2(p.x, p.z)) - t.x, p.y};
-    return glm::length(q) - t.y;
-}
-float getWorldMap(glm::vec3 point)
-{
-    auto pointTorus = point;
-    auto angleTorus = glm::vec3(m_time * -10.f, m_time * -15.f, m_time * -20.f);
-    auto transformTorus = rotateX(angleTorus.x) * rotateY(angleTorus.y) * rotateZ(angleTorus.z);
-    pointTorus = pointTorus * transformTorus;
-    float d = sdTorus(pointTorus, {2, 1.2f});
-    return d;
-}
-glm::vec3 getNormal(glm::vec3 point)
-{
-    const float smallStep = 0.001f;
-    float mapX = getWorldMap(point + glm::vec3(smallStep, 0, 0));
-    float mapY = getWorldMap(point + glm::vec3(0, smallStep, 0));
-    float mapZ = getWorldMap(point + glm::vec3(0, 0, smallStep));
-    float mapX2 = getWorldMap(point - glm::vec3(smallStep, 0, 0));
-    float mapY2 = getWorldMap(point - glm::vec3(0, smallStep, 0));
-    float mapZ2 = getWorldMap(point - glm::vec3(0, 0, smallStep));
-    float gradient_x = mapX - mapX2;
-    float gradient_y = mapY - mapY2;
-    float gradient_z = mapZ - mapZ2;
-
-    glm::vec3 normal = glm::vec3(gradient_x, gradient_y, gradient_z);
-    return normalize(normal);
-}
 float rayMarching(glm::vec3 rayOrigin, glm::vec3 rayDir)
 {
     float totalDistanceTraveled = 0.0f;
@@ -67,10 +20,10 @@ float rayMarching(glm::vec3 rayOrigin, glm::vec3 rayDir)
     for (int i = 0; i < NUMBER_OF_STEPS; ++i)
     {
         glm::vec3 current = rayOrigin + (totalDistanceTraveled * rayDir);
-        float distCircle = getWorldMap(current);
+        float distCircle = world.getWorldMap(current);
         if (distCircle < MIN_HIT_DIST)
         {
-            auto normal = getNormal(current);
+            auto normal = world.getWorldMapNormal(current);
             // auto lightPos = glm::vec3(0, 20, glm::sin(m_time) * 150);
             auto lightPos = glm::vec3(-5, 50, 30);
 
@@ -93,6 +46,29 @@ float rayMarching(glm::vec3 rayOrigin, glm::vec3 rayDir)
 
 int main()
 {
+    auto objTorus = world.newGameObject("Torus");
+    objTorus->scale = {2, 1.2, 0};
+    objTorus->onUpdate(
+        [objTorus](float deltaTime)
+        {
+            objTorus->rotation = glm::vec3(m_time * 10.f, m_time * 15.f, m_time * 20.f);
+            objTorus->position = {glm::sin(m_time * 10.f) * 2.f,
+                                  glm::cos(m_time * 10.f) * 2.f,
+                                  0};
+        });
+
+    objTorus->onGetSDF(
+        [objTorus](glm::vec3 point)
+        {
+            auto pointTorus = point;
+            pointTorus += objTorus->position;
+            auto angleTorus = objTorus->rotation;
+            auto transformTorus = rotateX(angleTorus.x) * rotateY(angleTorus.y) * rotateZ(angleTorus.z);
+            pointTorus = pointTorus * transformTorus;
+            float d = sdTorus(pointTorus, {objTorus->scale.x, objTorus->scale.y});
+            return d;
+        });
+
     auto camera = glm::vec3(0, 0, -10);
     const unsigned int resX = 50;
     const unsigned int resY = 50;
@@ -117,6 +93,7 @@ int main()
     while (true)
     {
         wait((int)std::round(maxDeltaTime * 1000));
+        world.update(maxDeltaTime);
         // wait(42);
         m_time += maxDeltaTime;
         totalTimeFPS += m_time;
